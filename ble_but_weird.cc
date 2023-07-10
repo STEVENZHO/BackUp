@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include <ArduinoBLE.h>
 
 class HardwareBLESerial {
