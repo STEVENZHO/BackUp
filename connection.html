@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Arduino BLE</title>
+    <script>
+      document.addEventListener("DOMContentLoaded", function (event) {
+        let connectButton = document.getElementById("connectButton");
+        let log = document.getElementById("log");
+        let lastReceivedTimestamp = 0;
+        let totalDataReceived = 0; // Total data received in bytes
+
+        function logMessage(message) {
+          log.textContent += message + "\n";
+        }
+
+        connectButton.onclick = async function () {
+          try {
+            log.textContent = "";
+
+            let device = await navigator.bluetooth.requestDevice({
+              filters: [{ services: ["12345678-1234-1234-1234-123456789abc"] }], // Change this to match your service UUID
+            });
+
+            let server = await device.gatt.connect();
+
+            let service = await server.getPrimaryService("12345678-1234-1234-1234-123456789abc");
+
+            let characteristic = await service.getCharacteristic(
+              "87654321-4321-4321-4321-bac987654321"
+            ); // Change this to match your characteristic UUID
+
+            characteristic.addEventListener("characteristicvaluechanged", handleData);
+            await characteristic.startNotifications();
+
+            function handleData(event) {
+              let data = new TextDecoder("utf-8").decode(
+                new DataView(event.target.value.buffer)
+              );
+              totalDataReceived += data.length; // Accumulate the size of the received data
+              let currentTimestamp = performance.now();
+              if (lastReceivedTimestamp > 0) {
+                let deltaT = currentTimestamp - lastReceivedTimestamp; // Time difference in milliseconds
+                let dataRate = (totalDataReceived / deltaT) * 1000 / 1024; // Data rate in KB/s
+                logMessage(`Received: ${data}`);
+                logMessage(`Data rate: ${dataRate.toFixed(2)} KB/s`);
+                totalDataReceived = 0; // Reset the total data received after calculation
+              }
+              lastReceivedTimestamp = currentTimestamp;
+            }
+
+            logMessage(`Connected to ${device.name}`);
+          } catch (error) {
+            logMessage(`Error: ${error}`);
+          }
+        };
+      });
+    </script>
+  </head>
+
+  <body>
+    <button id="connectButton">Connect</button>
+    <pre id="log"></pre>
+  </body>
+</html>
