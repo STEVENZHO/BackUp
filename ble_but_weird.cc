@@ -1,10 +1,11 @@
 #include <Arduino.h>
 #include <ArduinoBLE.h>
 
+void generate(char* arr);
 class HardwareBLESerial {
 public:
   HardwareBLESerial() {}
-  void write(char** arr, int size);
+  void write(char* arr, int size);
   bool beginAndSetupBLE(const char* name);
   operator bool();
 
@@ -12,8 +13,8 @@ private:
   HardwareBLESerial(HardwareBLESerial const& other) = delete;  // disable copy constructor
   void operator=(HardwareBLESerial const& other) = delete;    // disable assign constructor
   BLEService uartService = BLEService("12345678-1234-1234-1234-123456789abc");
-  BLECharacteristic transmitCharacteristic = BLECharacteristic("87654321-4321-4321-4321-bac987654321", BLERead | BLEWrite | BLENotify, 1024); // Increase characteristic value length to 1024
-};
+  BLECharacteristic transmitCharacteristic = BLECharacteristic("87654321-4321-4321-4321-bac987654321", BLERead | BLEWrite | BLENotify, 200); // Increase characteristic value length to 1024
+}; //the maximum bytes per connection cycle is 200 bytes, arduino takes time to ditch the non-used data
 
 bool HardwareBLESerial::beginAndSetupBLE(const char* name) {
   if (!BLE.begin()) { return false; }
@@ -26,15 +27,15 @@ bool HardwareBLESerial::beginAndSetupBLE(const char* name) {
   return true;
 }
 
-void HardwareBLESerial::write(char** arr, int size) {
+void HardwareBLESerial::write(char* arr, int size) {
   if(size <= 0)
     return;
-  this->transmitCharacteristic.writeValue(*arr, strlen(*arr)); 
+  generate(arr);
+  this->transmitCharacteristic.writeValue(arr, strlen(arr)); 
   if (BLE.connected()) {
     this->transmitCharacteristic.broadcast(); 
   }
-  delay(100);
-  this->write(arr+1, size-1);
+  this->write(arr, size-1);
 }
 
 HardwareBLESerial::operator bool() {
@@ -43,37 +44,30 @@ HardwareBLESerial::operator bool() {
 
 HardwareBLESerial bleSerial;
 
-char* array[1024]; 
+char array[200]; 
 
 void generate(char* arr) {
-  for (int i = 0; i < 1024; i++)
+  for (int i = 0; i < 200; i++)
     arr[i] = 'A' + (rand() % 26); 
-  arr[1023] = '\0'; 
+  arr[199] = '\0'; 
 }
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   Serial.begin(9600);
-  while (!bleSerial.beginAndSetupBLE("Echo"))
+  while (!bleSerial.beginAndSetupBLE("Echo")){
     Serial.println("Failed to set up BLE!");
+  }
   Serial.println("Setup Done!");
 }
 
 void loop() {
   BLEDevice central = BLE.central();
-  auto fill = [] (char** arr){
-    for(int i = 0; i<1024; i++){
-      arr[i] = (char*)malloc(1024 * sizeof(char));
-      generate(arr[i]);
-    }
-  };
   if (central) {
     digitalWrite(LED_BUILTIN, HIGH);
     Serial.println("Connected!");
-    fill(array);
     while (central.connected()) {
       bleSerial.write(array, 1024);
-      delay(1000);
     }
     Serial.println("Disconnected!");
     digitalWrite(LED_BUILTIN, LOW);
