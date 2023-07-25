@@ -1,75 +1,71 @@
-#include <Arduino.h>
-#include <ArduinoBLE.h>
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
 
-void generate(char* arr);
-class HardwareBLESerial {
-public:
-  HardwareBLESerial() {}
-  void write(char* arr, int size);
-  bool beginAndSetupBLE(const char* name);
-  operator bool();
+BLEServer* pServer = NULL;
+BLECharacteristic* pCharacteristic = NULL;
 
-private:
-  HardwareBLESerial(HardwareBLESerial const& other) = delete;  // disable copy constructor
-  void operator=(HardwareBLESerial const& other) = delete;    // disable assign constructor
-  BLEService uartService = BLEService("12345678-1234-1234-1234-123456789abc");
-  BLECharacteristic transmitCharacteristic = BLECharacteristic("87654321-4321-4321-4321-bac987654321", BLERead | BLEWrite | BLENotify, 200); // Increase characteristic value length to 1024
-}; //the maximum bytes per connection cycle is 200 bytes, arduino takes time to ditch the non-used data
+#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
-bool HardwareBLESerial::beginAndSetupBLE(const char* name) {
-  if (!BLE.begin()) { return false; }
-  BLE.setLocalName(name);
-  BLE.setDeviceName(name);
-  BLE.setAdvertisedService(uartService);
-  uartService.addCharacteristic(transmitCharacteristic);
-  BLE.addService(uartService);
-  BLE.advertise();
-  return true;
-}
+std::string sentence;
 
-void HardwareBLESerial::write(char* arr, int size) {
-  if(size <= 0)
-    return;
-  generate(arr);
-  this->transmitCharacteristic.writeValue(arr, strlen(arr)); 
-  if (BLE.connected()) {
-    this->transmitCharacteristic.broadcast(); 
-  }
-  this->write(arr, size-1);
-}
+class MyServerCallbacks: public BLEServerCallbacks {
+    public:
+    void onConnect(BLEServer* pServer) {
+      deviceConnected = true;
+    };
 
-HardwareBLESerial::operator bool() {
-  return BLE.connected();
-}
+    void onDisconnect(BLEServer* pServer) {
+      deviceConnected = false;
+    }
+    static bool deviceConnected;
+};
 
-HardwareBLESerial bleSerial;
+bool MyServerCallbacks::deviceConnected = false;
 
-char array[200]; 
-
-void generate(char* arr) {
-  for (int i = 0; i < 200; i++)
-    arr[i] = 'A' + (rand() % 26); 
-  arr[199] = '\0'; 
+void generate(std::string& sentence, int number){
+  sentence.clear();
+  for(int i = 0; i<number;i++)
+    sentence += 'A' + rand()%26;
 }
 
 void setup() {
-  pinMode(LED_BUILTIN, OUTPUT);
-  Serial.begin(9600);
-  while (!bleSerial.beginAndSetupBLE("Echo")){
-    Serial.println("Failed to set up BLE!");
-  }
-  Serial.println("Setup Done!");
+  Serial.begin(115200);
+
+  // Create the BLE Device
+  BLEDevice::init("ESP32_BLE");
+  
+  // Set MTU size
+  BLEDevice::setMTU(517);
+  
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new MyServerCallbacks());
+
+  BLEService *pService = pServer->createService(SERVICE_UUID);
+
+  pCharacteristic = pService->createCharacteristic(
+                     CHARACTERISTIC_UUID,
+                     BLECharacteristic::PROPERTY_READ |
+                     BLECharacteristic::PROPERTY_WRITE |
+                     BLECharacteristic::PROPERTY_NOTIFY
+                   );
+
+  pCharacteristic->addDescriptor(new BLE2902());
+
+  pService->start();
+
+  pServer->getAdvertising()->start();
+  Serial.println("Waiting a client connection to notify...");
 }
 
 void loop() {
-  BLEDevice central = BLE.central();
-  if (central) {
-    digitalWrite(LED_BUILTIN, HIGH);
-    Serial.println("Connected!");
-    while (central.connected()) {
-      bleSerial.write(array, 1024);
+  if (MyServerCallbacks::deviceConnected) {
+    while (MyServerCallbacks::deviceConnected) { // while connected, keep sending
+      generate(sentence, 510);
+      pCharacteristic->setValue(sentence);
+      pCharacteristic->notify();
     }
-    Serial.println("Disconnected!");
-    digitalWrite(LED_BUILTIN, LOW);
   }
 }
