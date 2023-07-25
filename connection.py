@@ -2,36 +2,34 @@ import asyncio
 from bleak import BleakClient
 import time
 
-device_address = "01:2f:7b:97:7e:af"  # replace this with your device's address
-characteristic_uuid = "87654321-4321-4321-4321-bac987654321"  # replace this with your characteristic's UUID
-data_size = 0  # in bytes
+address = "E0:5A:1B:CB:03:92"  # replace with your device address
+characteristic_uuid = "beb5483e-36e1-4688-b7f5-ea07361b26a8"  # replace with your characteristic UUID
+total_bytes_received = 0
+start_time = None
 
-async def run(address):
-    global data_size
-    client = BleakClient(address)
+async def run(address, loop):
+    global total_bytes_received, start_time
 
-    def callback(sender: int, data: bytearray):
-        global data_size
-        data_size += len(data)
-        print(f"Received data: {data}")
+    client = BleakClient(address, loop=loop)
+    
+    try:
+        await client.connect()
+        start_time = time.time()
 
-    print(f"Connecting to {address}...")
-    await client.connect()
-    print(f"Connected: {client.is_connected}")
+        while total_bytes_received < 1e6:  # while total data received is less than 1 MB
+            value = await client.read_gatt_char(characteristic_uuid)
+            total_bytes_received += len(value)
+            current_time = time.time()
+            elapsed_time = current_time - start_time
+            transfer_rate = (total_bytes_received / elapsed_time) / 1024  # Convert to KB/s
+            print(f"Total data received: {total_bytes_received / 1024} KB, Transfer rate: {transfer_rate} KB/s")  # short delay to avoid flooding
+            
+    except Exception as e:
+        print(e)
 
-    await client.start_notify(characteristic_uuid, callback)
-
-    print("Receiving data for 10 seconds...")
-    start_time = time.time()
-
-    await asyncio.sleep(10)
-    elapsed_time = time.time() - start_time
-    await client.stop_notify(characteristic_uuid)
-    await client.disconnect()
-
-    data_rate = data_size / elapsed_time  # bytes per second
-
-    print(f"Data rate: {data_rate} bytes/second")
+    finally:
+        if client.is_connected:
+            await client.disconnect()
 
 loop = asyncio.get_event_loop()
-loop.run_until_complete(run(device_address))
+loop.run_until_complete(run(address, loop))
