@@ -10,7 +10,7 @@ BLECharacteristic* pCharacteristic = NULL;
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
 std::string sentence;
-
+hw_timer_t *TimerCfg = NULL;
 class MyServerCallbacks: public BLEServerCallbacks {
     public:
     void onConnect(BLEServer* pServer) {
@@ -33,6 +33,10 @@ void generate(std::string& sentence, int number){
 
 void setup() {
   Serial.begin(115200);
+  TimerCfg = timerBegin(0, 80, true);
+  timerAttachInterrupt(TimerCfg, &ISR, true);
+  timerAlarmWrite(TimerCfg, 50000, true);
+  timerAlarmEnable(TimerCfg);
 
   // Create the BLE Device
   BLEDevice::init("ESP32_BLE");
