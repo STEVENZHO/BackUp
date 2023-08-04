@@ -2,10 +2,10 @@ import asyncio
 from bleak import BleakClient
 import time
 
-addresses = ["E0:5A:1B:CA:00:42", "E0:5A:1B:CB:03:92"]  # replace with your devices addresses
+addresses = ["E0:5A:1B:CA:00:42", "E0:5A:1B:CB:03:92", "44:09:E7:36:CE:8F", "01:2F:7B:97:7E:AF"]  # replace with your devices addresses
 characteristic_uuid = "beb5483e-36e1-4688-b7f5-ea07361b26a8"  # replace with your characteristic UUID
 
-total_bytes_received = [0, 0]
+total_bytes_received = [0, 0, 0, 0]
 start_time = None
 
 async def run(address, index, loop):
